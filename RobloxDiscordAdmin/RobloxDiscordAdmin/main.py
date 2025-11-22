@@ -5,92 +5,52 @@ import json
 from dotenv import load_dotenv
 import os
 
-# Load environment variables from .env file
 load_dotenv()
-
-# Get the Discord bot token from the environment variable
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
-# Initialize the Discord bot
-bot = commands.Bot(command_prefix="!")
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Roblox configuration (example)
-ROBOX_API_URL = "http://localhost:5000"  # URL to your Flask API running locally or on the web
-ROBLOX_SESSION_KEY = "your_roblox_session_key"  # API key or session token (if needed)
+# Set API_URL to your Render service public URL
+API_URL = os.getenv("API_URL")  # Example: https://myflaskapi.onrender.com
 
-
-# Example of Roblox Game Function
-def get_roblox_player_info(player_name):
-    """Fetch player data from Roblox API"""
-    response = requests.get(f"{ROBOX_API_URL}/player/{player_name}",
-                            headers={"Authorization": f"Bearer {ROBLOX_SESSION_KEY}"})
-
-    if response.status_code == 200:
-        return response.json()  # Return the player data as JSON
-    else:
-        return None  # Handle error if player data cannot be fetched
-
-
-# Discord command to get Roblox player info
 @bot.command()
-async def roblox(ctx, player_name: str):
-    """Command to get player info from Roblox"""
-    player_info = get_roblox_player_info(player_name)
-
-    if player_info:
-        await ctx.send(f"Player Info: {json.dumps(player_info, indent=2)}")  # Format the JSON data
-    else:
-        await ctx.send(f"Could not fetch data for player {player_name}.")
-
-
-# Command to create a session (initiates Roblox interaction and creates a forum)
-@bot.command()
-async def startsession(ctx):
-    """Create a session and create a forum channel for it"""
-
-    # Send a request to Flask API to create a session
-    response = requests.post(f"{ROBOX_API_URL}/start-session",
-                             json={"session_id": "session123", "session_name": "Test Session"})
-
+async def startsession(ctx, *, session_name: str):
+    response = requests.post(f"{API_URL}/start-session", json={"session_name": session_name})
     if response.status_code == 200:
-        session_data = response.json()  # Assuming the session response contains data like session ID, player names, etc.
-        session_id = session_data.get('session_id', 'Unknown')
-        session_name = session_data.get('session_name', 'Unknown')
-
-        # Create a new channel in the server for the session
-        guild = ctx.guild  # Get the current server (guild)
-
-        # Create the channel to track this session (assuming the session name is descriptive)
-        session_channel = await guild.create_text_channel(f"session-{session_id}",
-                                                          category=None)  # Optionally, assign to a specific category
-
-        # Send the session info to the new channel
-        await session_channel.send(f"Session started: {session_name} (ID: {session_id})")
-
-        # Optionally, post more details about the session
-        await session_channel.send(f"Session info: {json.dumps(session_data, indent=2)}")
-
-        await ctx.send(f"Session '{session_name}' started successfully and posted to {session_channel.mention}!")
+        session = response.json()['session']
+        await ctx.send(f"✅ Session started!\nID: `{session['session_id']}`\nName: `{session['session_name']}`")
     else:
-        await ctx.send("Failed to start session! Please try again later.")
+        await ctx.send(f"❌ Failed: {response.json()}")
 
-
-# Command to stop the session
 @bot.command()
-async def stopsession(ctx):
-    """Stop the current session"""
-    response = requests.post(f"{ROBOX_API_URL}/stop-session", json={"session_id": "session123"})
-
+async def stopsession(ctx, session_id: str):
+    response = requests.post(f"{API_URL}/stop-session", json={"session_id": session_id})
     if response.status_code == 200:
-        await ctx.send("Session stopped successfully!")
+        await ctx.send(f"✅ Session {session_id} stopped!")
     else:
-        await ctx.send("Failed to stop session!")
+        await ctx.send(f"❌ Failed: {response.json()}")
 
+@bot.command()
+async def getsession(ctx, session_id: str):
+    response = requests.get(f"{API_URL}/get-session/{session_id}")
+    if response.status_code == 200:
+        await ctx.send(f"ℹ️ Session info: ```json\n{json.dumps(response.json(), indent=2)}\n```")
+    else:
+        await ctx.send(f"❌ Not found.")
 
-# Run the bot
+@bot.command()
+async def listsessions(ctx):
+    response = requests.get(f"{API_URL}/list-sessions")
+    if response.status_code == 200:
+        await ctx.send(f"📄 All sessions: ```json\n{json.dumps(response.json(), indent=2)}\n```")
+    else:
+        await ctx.send(f"❌ Failed: {response.json()}")
+
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user.name} ({bot.user.id})')
-
+    print(f"Logged in as {bot.user} ({bot.user.id})")
+    print("Bot ready!")
 
 bot.run(DISCORD_BOT_TOKEN)
