@@ -1,48 +1,60 @@
-from flask import Flask, request, jsonify
-import uuid
+// index.js
+const express = require('express');
+const { v4: uuidv4 } = require('uuid');
+const bodyParser = require('body-parser');
 
-app = Flask(__name__)
+const app = express();
 
-# In-memory session storage
-sessions = {}
+// Middleware to parse JSON
+app.use(bodyParser.json());
 
-@app.route('/start-session', methods=['POST'])
-def start_session():
-    data = request.json
-    session_name = data.get("session_name")
+// In-memory session storage
+const sessions = {};
 
-    if not session_name:
-        return jsonify({"status": "error", "message": "Session name required"}), 400
+// Start session
+app.post('/start-session', (req, res) => {
+    const { session_name } = req.body;
 
-    session_id = str(uuid.uuid4())
-    sessions[session_id] = {"session_id": session_id, "session_name": session_name}
+    if (!session_name) {
+        return res.status(400).json({ status: "error", message: "Session name required" });
+    }
 
-    return jsonify({"status": "success", "session": sessions[session_id]}), 200
+    const session_id = uuidv4();
+    sessions[session_id] = { session_id, session_name };
 
-@app.route('/stop-session', methods=['POST'])
-def stop_session():
-    data = request.json
-    session_id = data.get("session_id")
+    return res.status(200).json({ status: "success", session: sessions[session_id] });
+});
 
-    if session_id in sessions:
-        del sessions[session_id]
-        return jsonify({"status": "success", "message": f"Session {session_id} stopped"}), 200
+// Stop session
+app.post('/stop-session', (req, res) => {
+    const { session_id } = req.body;
 
-    return jsonify({"status": "error", "message": "Session not found"}), 404
+    if (sessions[session_id]) {
+        delete sessions[session_id];
+        return res.status(200).json({ status: "success", message: `Session ${session_id} stopped` });
+    }
 
-@app.route('/get-session/<session_id>', methods=['GET'])
-def get_session(session_id):
-    if session_id in sessions:
-        return jsonify(sessions[session_id]), 200
-    return jsonify({"status": "error", "message": "Session not found"}), 404
+    return res.status(404).json({ status: "error", message: "Session not found" });
+});
 
-# Optional: list all sessions for debugging
-@app.route('/list-sessions', methods=['GET'])
-def list_sessions():
-    return jsonify(sessions), 200
+// Get session by ID
+app.get('/get-session/:session_id', (req, res) => {
+    const { session_id } = req.params;
 
-if __name__ == "__main__":
-    # Render sets PORT automatically via environment variable
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    if (sessions[session_id]) {
+        return res.status(200).json(sessions[session_id]);
+    }
+
+    return res.status(404).json({ status: "error", message: "Session not found" });
+});
+
+// List all sessions
+app.get('/list-sessions', (req, res) => {
+    return res.status(200).json(sessions);
+});
+
+// Start server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
