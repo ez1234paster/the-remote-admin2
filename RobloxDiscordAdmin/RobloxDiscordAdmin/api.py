@@ -1,42 +1,48 @@
 from flask import Flask, request, jsonify
+import uuid
 
 app = Flask(__name__)
 
-# Store sessions in a dictionary (just for example purposes)
+# In-memory session storage
 sessions = {}
 
-
-# Endpoint to start a session
 @app.route('/start-session', methods=['POST'])
 def start_session():
-    session_data = request.json  # Get JSON data from the request body
-    session_id = session_data.get('session_id')
+    data = request.json
+    session_name = data.get("session_name")
 
-    if session_id:
-        sessions[session_id] = session_data  # Store session data
-        return jsonify({"status": "success", "message": f"Session {session_id} started."}), 200
-    return jsonify({"status": "error", "message": "Session ID is required."}), 400
+    if not session_name:
+        return jsonify({"status": "error", "message": "Session name required"}), 400
 
+    session_id = str(uuid.uuid4())
+    sessions[session_id] = {"session_id": session_id, "session_name": session_name}
 
-# Endpoint to stop a session
+    return jsonify({"status": "success", "session": sessions[session_id]}), 200
+
 @app.route('/stop-session', methods=['POST'])
 def stop_session():
-    session_data = request.json
-    session_id = session_data.get('session_id')
+    data = request.json
+    session_id = data.get("session_id")
 
     if session_id in sessions:
-        del sessions[session_id]  # Delete session data
-        return jsonify({"status": "success", "message": f"Session {session_id} stopped."}), 200
-    return jsonify({"status": "error", "message": "Session not found."}), 404
+        del sessions[session_id]
+        return jsonify({"status": "success", "message": f"Session {session_id} stopped"}), 200
 
+    return jsonify({"status": "error", "message": "Session not found"}), 404
 
-# Endpoint to get session info
 @app.route('/get-session/<session_id>', methods=['GET'])
 def get_session(session_id):
     if session_id in sessions:
         return jsonify(sessions[session_id]), 200
-    return jsonify({"status": "error", "message": "Session not found."}), 404
+    return jsonify({"status": "error", "message": "Session not found"}), 404
 
+# Optional: list all sessions for debugging
+@app.route('/list-sessions', methods=['GET'])
+def list_sessions():
+    return jsonify(sessions), 200
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)  # This runs the server on localhost:5000
+if __name__ == "__main__":
+    # Render sets PORT automatically via environment variable
+    import os
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
